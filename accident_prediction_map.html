@@ -1,0 +1,421 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Accident Severity Prediction</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #map {
+            flex: 70%;
+            height: 100%;
+        }
+        #controls {
+            flex: 30%;
+            padding: 15px;
+            background-color: #f5f5f5;
+            height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .toggle-container {
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .toggle-label {
+            font-weight: bold;
+            flex: 1;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 26px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #2196F3;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        .slider-container {
+            margin-bottom: 0;
+            padding: 8px 12px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .slider-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+        .slider {
+            width: 100%;
+            margin: 8px 0;
+        }
+        .slider-value {
+            display: inline-block;
+            margin-left: 8px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        #prediction {
+            margin: 0;
+            padding: 12px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #prediction h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 1.2em;
+        }
+        #prediction p {
+            margin: 6px 0;
+            font-size: 0.95em;
+        }
+        h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.4em;
+        }
+        p {
+            margin: 0 0 12px 0;
+            font-size: 0.95em;
+        }
+        .severity-high {
+            color: red;
+            font-weight: bold;
+        }
+        .severity-medium {
+            color: orange;
+            font-weight: bold;
+        }
+        .severity-low {
+            color: green;
+            font-weight: bold;
+        }
+        #error-message {
+            display: none;
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        .road-type {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .highway {
+            color: #1976d2;
+        }
+        .local-road {
+            color: #388e3c;
+        }
+        .unknown-road {
+            color: #757575;
+        }
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading.show {
+            display: flex;
+        }
+        .loading-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #ff9800;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <span>Detecting road type...</span>
+        </div>
+    </div>
+    <div id="controls">
+        <h2>Accident Severity Prediction</h2>
+        <p>Click on the map to predict accident severity at that location</p>
+        <div id="error-message"></div>
+        <div id="prediction">
+            <h3>Current Prediction</h3>
+            <p>Click on the map to see prediction</p>
+        </div>
+        <div class="toggle-container">
+            <span class="toggle-label">Traffic Signal</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="Traffic_Signal_Flag">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-container">
+            <span class="toggle-label">Crossing</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="Crossing_Flag">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-container">
+            <span class="toggle-label">Highway (Auto-detected)</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="Highway_Flag" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="slider-container">
+            <label class="slider-label">Distance (miles)</label>
+            <input type="range" min="0" max="0.5" value="0.1" class="slider" id="Distance(mi)" step="0.01">
+            <span class="slider-value">0.1</span>
+        </div>
+        <div class="slider-container">
+            <label class="slider-label">Start Hour</label>
+            <input type="range" min="0" max="23" value="12" class="slider" id="Start_Hour" step="1">
+            <span class="slider-value">12</span>
+        </div>
+        <div class="slider-container">
+            <label class="slider-label">Start Month</label>
+            <input type="range" min="1" max="12" value="6" class="slider" id="Start_Month" step="1">
+            <span class="slider-value">6</span>
+        </div>
+        <div class="slider-container">
+            <label class="slider-label">Accident Duration (minutes)</label>
+            <input type="range" min="1" max="180" value="5" class="slider" id="Accident_Duration" step="1">
+            <span class="slider-value">5</span>
+        </div>
+    </div>
+    <div id="map"></div>
+    <script>
+        // Initialize the map
+        var map = L.map('map').setView([37.0902, -95.7129], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var currentMarker = null;
+        var features = {
+            'Traffic_Signal_Flag': 0,
+            'Crossing_Flag': 0,
+            'Highway_Flag': 1,
+            'Distance(mi)': 1.0,
+            'Start_Hour': 12,
+            'Start_Month': 6,
+            'Accident_Duration': 5
+        };
+
+        let updateTimer = null;
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateRoadTypeDisplay(roadType, roadName) {
+            // Update Highway Flag toggle only
+            const highwayToggle = document.getElementById('Highway_Flag');
+            const newValue = roadType === 'Highway' ? 1 : 0;
+            highwayToggle.checked = newValue === 1;
+            features['Highway_Flag'] = newValue;
+        }
+
+        // Update toggle values and handle changes
+        document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                features[this.id] = this.checked ? 1 : 0;
+
+                // Clear any existing timer
+                if (updateTimer) {
+                    clearTimeout(updateTimer);
+                }
+
+                // Set a new timer to update prediction after 500ms
+                if (currentMarker) {
+                    updateTimer = setTimeout(() => {
+                        updatePrediction(currentMarker.getLatLng());
+                    }, 500);
+                }
+            });
+        });
+
+        // Update slider values display and handle changes
+        document.querySelectorAll('.slider').forEach(slider => {
+            const valueDisplay = slider.nextElementSibling;
+            valueDisplay.textContent = slider.value;
+
+            slider.addEventListener('input', function() {
+                const value = this.value;
+                valueDisplay.textContent = value;
+                features[this.id] = parseFloat(value);
+
+                // Clear any existing timer
+                if (updateTimer) {
+                    clearTimeout(updateTimer);
+                }
+
+                // Set a new timer to update prediction after 500ms of no slider movement
+                if (currentMarker) {
+                    updateTimer = setTimeout(() => {
+                        updatePrediction(currentMarker.getLatLng());
+                    }, 500);
+                }
+            });
+        });
+
+        // Handle map clicks
+        map.on('click', function(e) {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            currentMarker = L.marker(e.latlng);
+            currentMarker.addTo(map);
+            updatePrediction(e.latlng);
+        });
+
+        async function updatePrediction(latlng) {
+            try {
+                // Show loading indicator
+                const loadingElement = document.getElementById('loading');
+                loadingElement.classList.add('show');
+
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ...features,
+                        lat: latlng.lat,
+                        lon: latlng.lng
+                    })
+                });
+
+                // Hide loading indicator
+                loadingElement.classList.remove('show');
+
+                if (!response.ok) {
+                    throw new Error('Server returned an error');
+                }
+
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                const severity = data.severity;
+                const severityText = ['Low', 'Medium', 'High', 'Very High'][severity - 1];
+                const severityClass = severity > 2 ? 'severity-high' : severity === 2 ? 'severity-medium' : 'severity-low';
+
+                // Update Highway Flag based on road type
+                updateRoadTypeDisplay(data.road_type, data.road_name);
+
+                // Update prediction display
+                document.getElementById('prediction').innerHTML = `
+                    <h3>Current Prediction</h3>
+                    <p>Location: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}</p>
+                    <p>Road Type: <span class="${data.road_type === 'Highway' ? 'highway' : data.road_type === 'Local Road' ? 'local-road' : 'unknown-road'}">${data.road_type}</span></p>
+                    <p>Road Name: ${data.road_name}</p>
+                    <p>Severity: <span class="${severityClass}">${severityText}</span></p>
+                `;
+
+                const popupContent = `
+                    <strong>Road Type:</strong> ${data.road_type}<br>
+                    <strong>Road Name:</strong> ${data.road_name}<br>
+                    <strong>Predicted Severity:</strong> ${severityText}
+                `;
+                currentMarker.bindPopup(popupContent).openPopup();
+            } catch (error) {
+                // Hide loading indicator on error
+                document.getElementById('loading').classList.remove('show');
+                console.error('Error:', error);
+                showError(`Failed to get prediction: ${error.message}`);
+                document.getElementById('prediction').innerHTML = `
+                    <h3>Error</h3>
+                    <p>Failed to get prediction. Please try again.</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
